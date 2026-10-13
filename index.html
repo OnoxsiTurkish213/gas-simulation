@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KinetikLab 3D — Gaz Özellikleri Simülasyonu</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+  :root{
+    --bg:#070d1a;
+    --panel:#0e1728;
+    --panel2:#12203a;
+    --line:#213352;
+    --ink:#e8eefb;
+    --mut:#8ea3c4;
+    --hot:#f59e0b;
+    --hot2:#ef4444;
+    --cold:#38bdf8;
+    --cold2:#22d3ee;
+    --heavy:#5aa2ff;
+    --light:#ff7a59;
+  }
+  html,body{height:100%;}
+  *{-webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0; overflow:hidden; touch-action:manipulation;
+    font-family:"IBM Plex Sans",system-ui,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(1100px 600px at 78% -10%, rgba(56,189,248,.10), transparent 60%),
+      radial-gradient(900px 700px at -10% 110%, rgba(245,158,11,.08), transparent 55%),
+      linear-gradient(180deg,#0a1322 0%, #070d1a 55%, #050a14 100%);
+  }
+  .font-disp{font-family:"Space Grotesk",sans-serif;}
+  #gl{position:absolute; inset:0; display:block; touch-action:none;}
+  select option{background:#0e1728; color:#e8eefb;}
+  select{outline:none;}
+
+  /* panels */
+  .panel{
+    background:linear-gradient(180deg, rgba(18,32,58,.92), rgba(12,21,38,.92));
+    border:1px solid var(--line);
+    box-shadow:0 10px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.04);
+    backdrop-filter:blur(8px);
+  }
+  .sec-title{
+    font-family:"Space Grotesk"; font-weight:600; letter-spacing:.12em;
+    font-size:11px; text-transform:uppercase; color:var(--mut);
+  }
+  .chip{
+    border:1px solid var(--line); background:var(--panel2);
+    transition:all .18s ease;
+  }
+  .chip:hover{border-color:#3b568a; transform:translateY(-1px);}
+  .chip:active{transform:translateY(0) scale(.97);}
+
+  /* readouts */
+  .readout{
+    background:linear-gradient(180deg,#0b1526,#0a1220);
+    border:1px solid var(--line); border-radius:10px;
+  }
+  .num{font-family:"Space Grotesk"; font-variant-numeric:tabular-nums; letter-spacing:.01em;}
+
+  /* sliders */
+  input[type=range]{-webkit-appearance:none; appearance:none; height:22px; background:transparent; width:100%;}
+  input[type=range]::-webkit-slider-runnable-track{height:6px; border-radius:99px;
+    background:linear-gradient(90deg,var(--cold),#64748b 50%,var(--hot));}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:16px;height:16px;border-radius:50%;
+    background:#fff; border:3px solid #0b1526; margin-top:-5px; box-shadow:0 0 0 1px var(--line),0 2px 8px rgba(0,0,0,.6); cursor:grab;}
+  input[type=range].vol::-webkit-slider-runnable-track{background:linear-gradient(90deg,#33507f,#5aa2ff);}
+
+  /* radio pills */
+  .mode-btn{transition:all .16s ease;}
+  .mode-btn.on{background:linear-gradient(180deg,#1b3a63,#153052); border-color:#3f6cab; color:#cfe4ff; box-shadow:inset 0 0 0 1px rgba(90,162,255,.25);}
+
+  /* scrollbar */
+  .scroll::-webkit-scrollbar{width:8px}
+  .scroll::-webkit-scrollbar-thumb{background:#24375c; border-radius:8px}
+  .scroll::-webkit-scrollbar-track{background:transparent}
+
+  .transport-btn{transition:all .15s ease;}
+  .transport-btn:hover{transform:translateY(-2px);}
+  .transport-btn:active{transform:scale(.95);}
+
+  .fade-in{animation:fadeIn .5s ease both;}
+  @keyframes fadeIn{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
+
+  .pulse-dot{animation:pulse 1.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.5} 50%{opacity:1}}
+
+  /* gauge */
+  .gauge-needle{transition:transform .25s cubic-bezier(.3,1.4,.5,1); transform-origin:100px 96px;}
+
+  .kbd{font-family:"Space Grotesk"; font-size:10px; border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; padding:1px 6px; color:var(--mut);}
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<!-- ================= HEADER ================= -->
+<header class="relative z-20 flex items-center justify-between px-5 h-14 border-b" style="border-color:var(--line); background:rgba(7,13,26,.75); backdrop-filter:blur(10px);">
+  <div class="flex items-center gap-3">
+    <div class="w-9 h-9 rounded-lg flex items-center justify-center text-white shadow-lg"
+         style="background:linear-gradient(135deg,#38bdf8,#2563eb 55%,#f59e0b);">
+      <i class="fa-solid fa-atom text-lg"></i>
+    </div>
+    <div class="leading-tight">
+      <div class="font-disp font-700 text-[15px] tracking-wide" style="font-weight:700;">KinetikLab <span class="text-sky-400">3D</span></div>
+      <div class="text-[10.5px] tracking-[.18em] uppercase" style="color:var(--mut);">Gaz Özellikleri · Kinetik Teori Simülasyonu</div>
+    </div>
+  </div>
+
+  <div class="hidden md:flex items-center gap-2 text-[11px]" style="color:var(--mut);">
+    <span class="px-2.5 py-1 rounded-full chip"><i class="fa-solid fa-flask mr-1.5 text-sky-400"></i>PV = Nk<sub>B</sub>T</span>
+    <span class="px-2.5 py-1 rounded-full chip"><i class="fa-solid fa-gauge-high mr-1.5 text-amber-400"></i>Çarpışma tabanlı basınç</span>
+    <span class="px-2.5 py-1 rounded-full chip"><i class="fa-solid fa-chart-line mr-1.5 text-emerald-400"></i>Maxwell–Boltzmann</span>
+  </div>
+
+  <div class="flex items-center gap-2">
+    <span class="hidden sm:flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full" style="background:#0d2417; color:#4ade80; border:1px solid #14532d;">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot"></span> Canlı Fizik Motoru
+    </span>
+    <button id="helpBtn" class="chip w-8 h-8 rounded-lg text-sm" title="Kullanım ve fizik modeli"><i class="fa-solid fa-circle-question"></i></button>
+  </div>
+</header>
+
+<!-- ================= MAIN ================= -->
+<main class="relative z-10" style="height:calc(100% - 56px);">
+
+  <!-- 3D viewport -->
+  <div id="viewport" class="absolute inset-0">
+    <canvas id="gl"></canvas>
+
+    <!-- HUD top-left: live law readout -->
+    <div class="absolute top-4 left-4 panel rounded-xl p-3.5 w-[206px] md:w-[248px] fade-in">
+      <div class="sec-title mb-2"><i class="fa-solid fa-square-root-variable mr-1.5"></i>Durum Denklemi</div>
+      <div class="num text-[13px] leading-6" style="color:var(--mut);">
+        <span style="color:#cfe4ff">P</span>·<span style="color:#cfe4ff">V</span> = <span style="color:#cfe4ff">N</span>·k<sub>B</sub>·<span style="color:#cfe4ff">T</span>
+      </div>
+      <div class="mt-2 grid grid-cols-2 gap-2 text-center">
+        <div class="readout py-1.5"><div class="text-[9.5px] uppercase tracking-wider" style="color:var(--mut)">P·V</div><div id="pv" class="num text-[13px] text-sky-300">—</div></div>
+        <div class="readout py-1.5"><div class="text-[9.5px] uppercase tracking-wider" style="color:var(--mut)">N·k<sub>B</sub>·T</div><div id="nkt" class="num text-[13px] text-amber-300">—</div></div>
+      </div>
+      <div id="lawDelta" class="mt-2 text-[10.5px] text-center num" style="color:var(--mut)">sapma: —</div>
+    </div>
+
+    <!-- HUD top-right: collision / stopwatch badges -->
+    <div class="absolute top-4 right-4 md:right-[348px] flex flex-col gap-2 items-end" style="pointer-events:none;">
+      <div id="badgeStop" class="panel rounded-lg px-3 py-1.5 hidden">
+        <i class="fa-solid fa-stopwatch mr-2 text-sky-400"></i><span class="num text-[13px]" id="stopVal">0.00 s</span>
+      </div>
+      <div id="badgeCol" class="panel rounded-lg px-3 py-1.5 hidden">
+        <i class="fa-solid fa-burst mr-2 text-amber-400"></i><span class="num text-[13px]" id="colVal">0</span>
+        <span class="text-[10px] ml-1" style="color:var(--mut)">çarpışma</span>
+      </div>
+    </div>
+
+    <!-- Histogram overlay -->
+    <div id="histPanel" class="absolute bottom-28 md:bottom-24 left-4 panel rounded-xl p-3.5 w-[min(380px,calc(100vw-2rem))] hidden fade-in z-10">
+      <div class="flex items-center justify-between mb-1">
+        <div class="sec-title"><i class="fa-solid fa-chart-column mr-1.5"></i>Hız Dağılımı (Maxwell–Boltzmann)</div>
+        <button id="histClose" class="text-[11px]" style="color:var(--mut)"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div style="height:190px"><canvas id="histChart"></canvas></div>
+    </div>
+
+    <!-- hint -->
+    <div class="absolute bottom-24 right-4 md:right-[348px] text-[10.5px] hidden md:flex items-center gap-2" style="color:var(--mut); pointer-events:none;">
+      <i class="fa-solid fa-arrows-up-down-left-right"></i> Sürükle: döndür · Tekerlek: yakınlaştır · Kapak: hacim
+    </div>
+  </div>
+
+  <!-- ============ RIGHT CONTROL PANEL ============ -->
+  <div id="panelBackdrop" class="fixed inset-0 z-20 hidden" style="background:rgba(3,7,15,.55);"></div>
+  <button id="panelToggle" class="md:hidden fixed z-40 w-11 h-11 rounded-xl panel items-center justify-center text-sky-300 text-[15px]" style="top:66px; right:12px; display:flex;" title="Kontroller"><i class="fa-solid fa-sliders"></i></button>
+  <aside id="sidePanel" class="absolute top-0 right-0 h-full w-[332px] max-w-[88vw] panel border-l scroll overflow-y-auto z-30 transition-transform duration-300 translate-x-full md:translate-x-0" style="border-color:var(--line);">
+    <div class="p-4 flex flex-col gap-4">
+
+      <!-- PARTICLES -->
+      <section class="rounded-xl p-3.5" style="background:rgba(10,18,33,.6); border:1px solid var(--line);">
+        <div class="sec-title mb-3"><i class="fa-solid fa-circle-nodes mr-1.5 text-sky-400"></i>Parçacıklar</div>
+
+        <!-- heavy -->
+        <div class="mb-3">
+          <div class="flex items-center justify-between mb-1.5 gap-2">
+            <span class="flex items-center gap-2 text-[13px] font-medium shrink-0"><span class="w-3 h-3 rounded-full" style="background:var(--heavy); box-shadow:0 0 8px var(--heavy)"></span>Ağır</span>
+            <select id="selHeavy" class="chip rounded-md text-[11px] px-1.5 py-1 flex-1 min-w-0" style="color:var(--ink)">
+              <option value="28">N₂ · 28 u</option>
+              <option value="32">O₂ · 32 u</option>
+              <option value="40" selected>Ar · 40 u</option>
+              <option value="44">CO₂ · 44 u</option>
+            </select>
+            <span class="num text-[13px] text-sky-300" id="nHeavy">100</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button data-act="h-" data-n="10" class="chip rounded-md w-8 h-7 text-[11px]" title="-10"><i class="fa-solid fa-backward"></i></button>
+            <button data-act="h-" data-n="1"  class="chip rounded-md w-7 h-7 text-[11px]" title="-1"><i class="fa-solid fa-minus"></i></button>
+            <div class="flex-1 readout text-center py-1 num text-[12px]" id="nHeavyBox">100</div>
+            <button data-act="h+" data-n="1"  class="chip rounded-md w-7 h-7 text-[11px]" title="+1"><i class="fa-solid fa-plus"></i></button>
+            <button data-act="h+" data-n="10" class="chip rounded-md w-8 h-7 text-[11px]" title="+10"><i class="fa-solid fa-forward"></i></button>
+          </div>
+        </div>
+
+        <!-- light -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5 gap-2">
+            <span class="flex items-center gap-2 text-[13px] font-medium shrink-0"><span class="w-3 h-3 rounded-full" style="background:var(--light); box-shadow:0 0 8px var(--light)"></span>Hafif</span>
+            <select id="selLight" class="chip rounded-md text-[11px] px-1.5 py-1 flex-1 min-w-0" style="color:var(--ink)">
+              <option value="2">H₂ · 2 u</option>
+              <option value="4" selected>He · 4 u</option>
+              <option value="20">Ne · 20 u</option>
+            </select>
+            <span class="num text-[13px]" style="color:var(--light)" id="nLight">0</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button data-act="l-" data-n="10" class="chip rounded-md w-8 h-7 text-[11px]"><i class="fa-solid fa-backward"></i></button>
+            <button data-act="l-" data-n="1"  class="chip rounded-md w-7 h-7 text-[11px]"><i class="fa-solid fa-minus"></i></button>
+            <div class="flex-1 readout text-center py-1 num text-[12px]" id="nLightBox">0</div>
+            <button data-act="l+" data-n="1"  class="chip rounded-md w-7 h-7 text-[11px]"><i class="fa-solid fa-plus"></i></button>
+            <button data-act="l+" data-n="10" class="chip rounded-md w-8 h-7 text-[11px]"><i class="fa-solid fa-forward"></i></button>
+          </div>
+        </div>
+
+        <div class="mt-3 flex gap-2">
+          <button id="dividerBtn" class="chip flex-1 rounded-lg py-1.5 text-[11.5px]"><i class="fa-solid fa-grip-lines-vertical mr-1.5"></i>Bölme Duvarı</button>
+          <button id="separateBtn" class="chip flex-1 rounded-lg py-1.5 text-[11.5px]" title="Ağır gazı sola, hafif gazı sağa ayır"><i class="fa-solid fa-left-right mr-1.5"></i>Gazları Ayır</button>
+        </div>
+      </section>
+
+      <!-- THERMAL -->
+      <section class="rounded-xl p-3.5" style="background:rgba(10,18,33,.6); border:1px solid var(--line);">
+        <div class="sec-title mb-3"><i class="fa-solid fa-temperature-half mr-1.5 text-amber-400"></i>Termal Kontrol</div>
+        <div class="flex items-center gap-2">
+          <button id="coolBtn" class="chip rounded-lg px-3 py-2 text-[12px]" style="color:var(--cold)"><i class="fa-solid fa-snowflake mr-1"></i>Soğut</button>
+          <div class="flex-1 text-center">
+            <div class="num text-[26px] font-700 leading-none" id="tempBig" style="font-weight:700; color:#ffd9a0;">300</div>
+            <div class="text-[10px] uppercase tracking-widest mt-0.5" style="color:var(--mut)">Kelvin</div>
+          </div>
+          <button id="heatBtn" class="chip rounded-lg px-3 py-2 text-[12px]" style="color:var(--hot)"><i class="fa-solid fa-fire mr-1"></i>Isıt</button>
+        </div>
+        <input type="range" id="tempSlider" min="20" max="1200" value="300" class="mt-2">
+        <div class="flex justify-between text-[10px] num" style="color:var(--mut)"><span>20 K</span><span id="tempTarget" class="hidden text-amber-300">hedef: 300 K</span><span>1200 K</span></div>
+      </section>
+
+      <!-- HOLD CONSTANT -->
+      <section class="rounded-xl p-3.5" style="background:rgba(10,18,33,.6); border:1px solid var(--line);">
+        <div class="sec-title mb-3"><i class="fa-solid fa-lock mr-1.5 text-emerald-400"></i>Sabit Tutulan Büyüklük</div>
+        <div class="grid grid-cols-2 gap-2">
+          <button data-mode="none" class="mode-btn on chip rounded-lg py-2 text-[12px]"><i class="fa-solid fa-circle-dot mr-1.5"></i>Hiçbiri</button>
+          <button data-mode="V" class="mode-btn chip rounded-lg py-2 text-[12px]"><i class="fa-solid fa-cube mr-1.5"></i>Hacim (V)</button>
+          <button data-mode="T" class="mode-btn chip rounded-lg py-2 text-[12px]"><i class="fa-solid fa-temperature-half mr-1.5"></i>Sıcaklık (T)</button>
+          <button data-mode="P" class="mode-btn chip rounded-lg py-2 text-[12px]"><i class="fa-solid fa-gauge mr-1.5"></i>Basınç (P)</button>
+        </div>
+        <p id="modeDesc" class="mt-2.5 text-[11px] leading-relaxed" style="color:var(--mut)">
+          Sistem yalıtık: enerji ve hacim yalnızca sizin müdahalenizle değişir.
+        </p>
+      </section>
+
+      <!-- VOLUME -->
+      <section class="rounded-xl p-3.5" style="background:rgba(10,18,33,.6); border:1px solid var(--line);">
+        <div class="flex items-center justify-between mb-2">
+          <div class="sec-title"><i class="fa-solid fa-up-down mr-1.5 text-sky-400"></i>Hacim (Piston)</div>
+          <span class="num text-[13px] text-sky-300" id="volVal">4 096 nm³</span>
+        </div>
+        <input type="range" id="volSlider" class="vol" min="6" max="30" step="0.1" value="16">
+        <div class="text-[10px] mt-1" style="color:var(--mut)">3B sahnede kapağı sürükleyerek de ayarlayabilirsiniz.</div>
+      </section>
+
+      <!-- MEASUREMENTS -->
+      <section class="rounded-xl p-3.5" style="background:rgba(10,18,33,.6); border:1px solid var(--line);">
+        <div class="sec-title mb-3"><i class="fa-solid fa-gauge-high mr-1.5 text-amber-400"></i>Ölçümler</div>
+
+        <!-- pressure gauge -->
+        <div class="flex items-center gap-3">
+          <svg width="128" height="86" viewBox="0 0 200 110" class="shrink-0">
+            <path d="M16 96 A 84 84 0 0 1 184 96" fill="none" stroke="#213352" stroke-width="12" stroke-linecap="round"/>
+            <path d="M16 96 A 84 84 0 0 1 184 96" fill="none" stroke="url(#gg)" stroke-width="12" stroke-linecap="round" stroke-dasharray="264" stroke-dashoffset="264" id="gaugeArc"/>
+            <defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#22d3ee"/><stop offset=".55" stop-color="#f59e0b"/><stop offset="1" stop-color="#ef4444"/>
+            </linearGradient></defs>
+            <g id="needleG" class="gauge-needle"><line x1="100" y1="96" x2="30" y2="96" stroke="#f8fafc" stroke-width="3.5" stroke-linecap="round"/></g>
+            <circle cx="100" cy="96" r="6" fill="#e8eefb"/>
+            <text x="14" y="108" font-size="10" fill="#8ea3c4" font-family="Space Grotesk">0</text>
+            <text x="176" y="108" font-size="10" fill="#8ea3c4" font-family="Space Grotesk">4</text>
+            <text x="94" y="26" font-size="10" fill="#8ea3c4" font-family="Space Grotesk">atm</text>
+          </svg>
+          <div class="flex-1">
+            <div class="num text-[24px] font-700 leading-none" id="presBig" style="font-weight:700;">1.00</div>
+            <div class="text-[10px] uppercase tracking-widest" style="color:var(--mut)">atm · ölçülen</div>
+            <div class="mt-1.5 text-[11px] num" style="color:var(--mut)">teorik: <span id="presIdeal" class="text-sky-300">1.00</span> atm</div>
+            <div class="text-[11px] num" style="color:var(--mut)"><span id="presKpa">101.3</span> kPa</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 mt-3">
+          <div class="readout p-2.5">
+            <div class="text-[9.5px] uppercase tracking-wider mb-1" style="color:var(--mut)">Ort. Kinetik Enerji</div>
+            <div class="num text-[13px]"><span class="text-sky-300" id="keA">—</span></div>
+            <div class="num text-[13px]"><span id="keB" style="color:var(--light)">—</span></div>
+            <div class="text-[9px] mt-0.5" style="color:var(--mut)">kJ/mol · ağır / hafif</div>
+          </div>
+          <div class="readout p-2.5">
+            <div class="text-[9.5px] uppercase tracking-wider mb-1" style="color:var(--mut)">RMS Hız</div>
+            <div class="num text-[13px]"><span class="text-sky-300" id="rmsA">—</span></div>
+            <div class="num text-[13px]"><span id="rmsB" style="color:var(--light)">—</span></div>
+            <div class="text-[9px] mt-0.5" style="color:var(--mut)">m/s · ağır / hafif</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TOOLS -->
+      <section class="rounded-xl p-3.5" style="background:rgba(10,18,33,.6); border:1px solid var(--line);">
+        <div class="sec-title mb-3"><i class="fa-solid fa-toolbox mr-1.5"></i>Araçlar</div>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="tglStop" class="chip rounded-lg py-2.5 text-[11px]"><i class="fa-solid fa-stopwatch block mb-1 text-sky-400"></i>Kronometre</button>
+          <button id="tglCol" class="chip rounded-lg py-2.5 text-[11px]"><i class="fa-solid fa-burst block mb-1 text-amber-400"></i>Çarpışma Sayacı</button>
+          <button id="tglHist" class="chip rounded-lg py-2.5 text-[11px]"><i class="fa-solid fa-chart-column block mb-1 text-emerald-400"></i>Hız Dağılımı</button>
+          <button id="csvBtn" class="chip rounded-lg py-2.5 text-[11px]"><i class="fa-solid fa-file-csv block mb-1 text-violet-400"></i>Veri İndir (CSV)</button>
+        </div>
+        <div id="csvState" class="mt-2 text-[10.5px] hidden" style="color:var(--mut)"><i class="fa-solid fa-circle-dot mr-1 text-violet-400 pulse-dot"></i>Kayıt sürüyor — <span id="csvRows" class="num">0</span> satır</div>
+      </section>
+
+    </div>
+  </aside>
+
+  <!-- ============ BOTTOM TRANSPORT ============ -->
+  <div class="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 panel rounded-2xl px-3 py-2 flex items-center gap-2 flex-wrap justify-center max-w-[calc(100vw-5.5rem)]">
+    <button id="playBtn" class="transport-btn w-11 h-11 rounded-xl text-white text-[15px]" style="background:linear-gradient(135deg,#2563eb,#38bdf8);" title="Oynat / Duraklat (Boşluk)">
+      <i class="fa-solid fa-pause"></i>
+    </button>
+    <button id="stepBtn" class="transport-btn chip w-9 h-9 rounded-xl text-[12px]" title="Tek adım"><i class="fa-solid fa-forward-step"></i></button>
+    <div class="w-px h-7 mx-1" style="background:var(--line)"></div>
+
+    <div class="flex items-center gap-1" id="speedGroup">
+      <button data-sp="0.25" class="chip rounded-md px-2 py-1 text-[10.5px] num">0.25×</button>
+      <button data-sp="0.5"  class="chip rounded-md px-2 py-1 text-[10.5px] num">0.5×</button>
+      <button data-sp="1"    class="chip on rounded-md px-2 py-1 text-[10.5px] num" style="background:#153052; border-color:#3f6cab; color:#cfe4ff;">1×</button>
+      <button data-sp="2"    class="chip rounded-md px-2 py-1 text-[10.5px] num">2×</button>
+    </div>
+
+    <div class="w-px h-7 mx-1" style="background:var(--line)"></div>
+    <button id="resetBtn" class="transport-btn chip w-9 h-9 rounded-xl text-[12px]" style="color:var(--hot)" title="Sıfırla"><i class="fa-solid fa-rotate-left"></i></button>
+    <button id="fsBtn" class="transport-btn chip w-9 h-9 rounded-xl text-[12px]" title="Tam ekran"><i class="fa-solid fa-expand"></i></button>
+  </div>
+
+</main>
+
+<!-- ============ HELP MODAL ============ -->
+<div id="helpModal" class="fixed inset-0 z-50 hidden items-center justify-center p-6" style="background:rgba(3,7,15,.7); backdrop-filter:blur(4px);">
+  <div class="panel rounded-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto scroll p-6">
+    <div class="flex items-start justify-between mb-4">
+      <div>
+        <h2 class="font-disp text-xl font-700" style="font-weight:700;">Fizik Modeli ve Kullanım</h2>
+        <p class="text-[12px] mt-1" style="color:var(--mut)">KinetikLab 3D — üniversite düzeyi ideal gaz & kinetik teori laboratuvarı</p>
+      </div>
+      <button id="helpClose" class="chip w-8 h-8 rounded-lg"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="space-y-4 text-[13px] leading-relaxed" style="color:#c6d4ea;">
+      <div>
+        <div class="sec-title mb-1.5">Gerçek birimlerde moleküler dinamik</div>
+        <p>Her parçacık Newton mekaniğine göre hareket eder; duvarlara ve birbirlerine <b>elastik</b> çarpar. Basınç, formülle varsayılmaz — duvarlara aktarılan momentumun zaman ortalamasından <b>ölçülür</b> ve PV = Nk<sub>B</sub>T ile karşılaştırılır. Nanometre ölçekli odada ~100 parçacık, 300 K'de ≈ 1 atm üretir.</p>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="readout p-3"><span class="num text-sky-300">v<sub>rms</sub> = √(3k<sub>B</sub>T/m)</span><br><span class="text-[11px]" style="color:var(--mut)">Kök-ortalama-kare hız</span></div>
+        <div class="readout p-3"><span class="num text-amber-300">Ē = ½mv² = (3/2)k<sub>B</sub>T</span><br><span class="text-[11px]" style="color:var(--mut)">Equipartition teoremi</span></div>
+        <div class="readout p-3"><span class="num text-emerald-300">P = (2m·Σv⊥)/(A·Δt)</span><br><span class="text-[11px]" style="color:var(--mut)">Momentum akısından basınç</span></div>
+        <div class="readout p-3"><span class="num" style="color:var(--light)">f(v) ∝ v²e^(−mv²/2kT)</span><br><span class="text-[11px]" style="color:var(--mut)">Maxwell–Boltzmann dağılımı</span></div>
+      </div>
+      <div>
+        <div class="sec-title mb-1.5">Önerilen deneyler</div>
+        <ul class="list-disc pl-5 space-y-1">
+          <li><b>Boyle Yasası:</b> "Hacim" modunda pistonu sürükleyin; P'nin 1/V ile değişimini izleyin.</li>
+          <li><b>Charles Yasası:</b> "Basınç" modunda ısıtın; pistonun yükselişi V ∝ T ilişkisini gösterir.</li>
+          <li><b>Gay-Lussac:</b> "Hacim" modunda ısıtın; P ∝ T doğrusallığını doğrulayın.</li>
+          <li><b>Graham Difüzyonu:</b> "Gazları Ayır" + bölme duvarını kaldırın; hafif gazın daha hızlı karıştığını ölçün.</li>
+          <li><b>Equipartition:</b> İki türü karıştırın; farklı kütlelere rağmen ortalama kinetik enerjilerin eşitlendiğini görün.</li>
+          <li><b>Gerçek gazlar:</b> Tür başına gaz seçin (H₂, He, Ne / N₂, O₂, Ar, CO₂); RMS hız ve dağılımın kütleyle değişimini karşılaştırın.</li>
+          <li><b>Adyabatik sıkıştırma:</b> "Hiçbiri" modunda pistonu hızla aşağı itin; sıcaklığın yükseldiğini gözlemleyin.</li>
+        </ul>
+        <p class="mt-2"><b>Veri:</b> "Veri İndir (CSV)" ile T, P, V ve N zaman serisini kaydedip Excel/Python'da analiz edin.</p>
+      </div>
+      <div class="text-[11.5px]" style="color:var(--mut)">
+        <span class="kbd">Boşluk</span> oynat/duraklat · <span class="kbd">H</span> ısıt · <span class="kbd">C</span> soğut · Fare ile sahneyi döndürün, kapağı dikey sürükleyerek hacmi değiştirin.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SIMULATION ================= -->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* ---------------- physical constants (SI) ---------------- */
+const KB = 1.380649e-23;          // J/K
+const AMU = 1.660539e-27;         // kg
+const NA = 6.02214076e23;
+const ATM = 101325;               // Pa
+/* görsel hız [nm/s] = gerçek hız [m/s] × SPEED_SCALE  (izlenebilirlik için ~5e9 kat yavaşlatma) */
+const SPEED_SCALE = 5.0e-3;
+const TSCALE = SPEED_SCALE*1e-9;  // gerçek saniye / görsel saniye
+const NM = 1e-9;
+
+const SPECIES = {
+  heavy: { m: 40*AMU, r: 0.62, color: new THREE.Color('#5aa2ff'), glow:'#9ecbff' },
+  light: { m: 4*AMU,  r: 0.42, color: new THREE.Color('#ff7a59'), glow:'#ffb59e' },
+};
+const MAXP = 500;
+
+/* ---------------- state ---------------- */
+const S = {
+  paused:false, speed:1, mode:'none',
+  T:300, Ttarget:300,
+  heating:false, cooling:false,
+  bx:16, bz:16, h:16,             // nm
+  hTarget:16,
+  divider:false, vLid:0, simT:0,
+  stopwatchOn:false, stopT:0,
+  colCountOn:false, collisions:0, wallHits:0,
+  histOn:false,
+  pMeasured:0, pEMA:0,
+};
+
+/* particles stored in typed arrays */
+const P = {
+  sp:  new Uint8Array(MAXP),      // 0 heavy, 1 light
+  x:new Float64Array(MAXP), y:new Float64Array(MAXP), z:new Float64Array(MAXP),
+  vx:new Float64Array(MAXP), vy:new Float64Array(MAXP), vz:new Float64Array(MAXP),
+  flash:new Float32Array(MAXP),
+  n:0,
+};
+
+function vrmsSim(sp, T){ return SPEED_SCALE * Math.sqrt(3*KB*T/SPECIES[sp?'light':'heavy'].m); }
+
+/* Gaussian (Box-Muller) */
+function gauss(){ let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+function spawn(sp, side){
+  if(P.n>=MAXP) return;
+  const i=P.n++, s=SPECIES[sp?'light':'heavy'];
+  P.sp[i]=sp?1:0;
+  let x=(Math.random()*(S.bx-2*s.r)+s.r);
+  if(S.divider){ x = side==='L' ? Math.random()*(S.bx/2-2*s.r)+s.r : S.bx/2+Math.random()*(S.bx/2-2*s.r)+s.r; }
+  P.x[i]=x; P.z[i]=Math.random()*(S.bz-2*s.r)+s.r;
+  P.y[i]=s.r+Math.random()*(S.h-2*s.r);
+  /* yeni parçacık, mevcut gazın sıcaklığıyla (yoksa hedef T) doğar */
+  const Tspawn = P.n>1 ? Math.max(currentT(),10) : Math.max(S.Ttarget||300, 10);
+  const sig=vrmsSim(sp,Tspawn)/Math.sqrt(3); // 3 bileşen → |v|_rms = √3·σ
+  P.vx[i]=gauss()*sig; P.vy[i]=gauss()*sig; P.vz[i]=gauss()*sig;
+  P.flash[i]=1;
+}
+function remove(sp){
+  for(let i=P.n-1;i>=0;i--) if(P.sp[i]===(sp?1:0)){ P.n--; if(i!==P.n){ copyP(i,P.n);} return; }
+}
+function copyP(a,b){ P.sp[a]=P.sp[b]; P.x[a]=P.x[b]; P.y[a]=P.y[b]; P.z[a]=P.z[b];
+  P.vx[a]=P.vx[b]; P.vy[a]=P.vy[b]; P.vz[a]=P.vz[b]; P.flash[a]=P.flash[b]; }
+
+function currentT(){
+  if(P.n===0) return 0;
+  let E=0;
+  for(let i=0;i<P.n;i++){ const m=SPECIES[P.sp[i]?'light':'heavy'].m;
+    const v2=(P.vx[i]**2+P.vy[i]**2+P.vz[i]**2)/(SPEED_SCALE*SPEED_SCALE);
+    E+=0.5*m*v2; }
+  return (2*E)/(3*KB*P.n);
+}
+function rescaleTemp(factor){
+  for(let i=0;i<P.n;i++){ P.vx[i]*=factor; P.vy[i]*=factor; P.vz[i]*=factor; }
+}
+
+/* ---------------- three.js scene ---------------- */
+const canvas=document.getElementById('gl');
+const renderer=new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x070d1a);
+scene.fog=new THREE.FogExp2(0x070d1a, 0.012);
+
+const camera=new THREE.PerspectiveCamera(42, 1, 0.1, 500);
+camera.position.set(26, 18, 30);
+
+const controls=new OrbitControls(camera, canvas);
+controls.enableDamping=true; controls.dampingFactor=0.08;
+controls.minDistance=14; controls.maxDistance=90;
+controls.maxPolarAngle=Math.PI*0.52;
+
+/* lights */
+scene.add(new THREE.AmbientLight(0x8fb3ff, 0.55));
+const key=new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(18,30,14); scene.add(key);
+const rim=new THREE.DirectionalLight(0x38bdf8, 0.8); rim.position.set(-20,12,-16); scene.add(rim);
+const warm=new THREE.PointLight(0xf59e0b, 0.6, 120); warm.position.set(0,-6,22); scene.add(warm);
+
+/* floor */
+const floor=new THREE.Mesh(
+  new THREE.CircleGeometry(70, 64),
+  new THREE.MeshStandardMaterial({color:0x0a1424, roughness:0.9, metalness:0.1}));
+floor.rotation.x=-Math.PI/2; floor.position.y=-0.02; scene.add(floor);
+const grid=new THREE.GridHelper(120, 60, 0x1c3357, 0x12233f);
+grid.material.transparent=true; grid.material.opacity=0.5; scene.add(grid);
+
+/* container group (rebuildable width) */
+const box=new THREE.Group(); scene.add(box);
+let walls, edges, lid, lidRod, lidHandle, dividerWall, ruler;
+
+const glassMat=new THREE.MeshPhysicalMaterial({
+  color:0x9fc6ff, transparent:true, opacity:0.08, roughness:0.05, metalness:0,
+  side:THREE.DoubleSide, depthWrite:false,
+});
+const edgeMat=new THREE.LineBasicMaterial({color:0x5aa2ff, transparent:true, opacity:0.75});
+const steelMat=new THREE.MeshStandardMaterial({color:0xb9c6d8, metalness:0.9, roughness:0.28});
+const steelDark=new THREE.MeshStandardMaterial({color:0x6b7a90, metalness:0.85, roughness:0.35});
+
+function buildContainer(){
+  box.clear();
+  const {bx,bz}=S;
+  walls=new THREE.Mesh(new THREE.BoxGeometry(bx,1,bz), glassMat);
+  walls.scale.y=1; box.add(walls);
+  edges=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(bx,1,bz)), edgeMat);
+  box.add(edges);
+
+  lid=new THREE.Mesh(new THREE.BoxGeometry(bx+0.8, 0.7, bz+0.8), steelMat);
+  lid.position.y=0.35; box.add(lid);
+  lidRod=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,6,20), steelDark);
+  lidRod.position.y=3.4; box.add(lidRod);
+  lidHandle=new THREE.Mesh(new THREE.TorusGeometry(1.5,0.28,14,40), steelMat);
+  lidHandle.rotation.x=Math.PI/2; lidHandle.position.y=6.6; box.add(lidHandle);
+  lid.userData.drag=true; lidRod.userData.drag=true; lidHandle.userData.drag=true;
+
+  dividerWall=new THREE.Mesh(new THREE.BoxGeometry(0.22,1,bz), 
+    new THREE.MeshPhysicalMaterial({color:0x22d3ee, transparent:true, opacity:0.28, roughness:0.1, emissive:0x0e7490, emissiveIntensity:0.4}));
+  dividerWall.position.x=0; dividerWall.visible=S.divider; box.add(dividerWall);
+
+  /* ruler */
+  ruler=new THREE.Group();
+  for(let v=6; v<=30; v+=2){
+    const t=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.06,0.06), new THREE.MeshBasicMaterial({color:0x3b568a}));
+    t.position.set(bx/2+1.2, v, -bz/2); ruler.add(t);
+  }
+  box.add(ruler);
+
+  updateLid();
+}
+function updateLid(){
+  const h=S.h;
+  walls.scale.set(1,h,1); walls.position.y=h/2;
+  edges.scale.set(1,h,1); edges.position.y=h/2;
+  lid.position.y=h+0.35;
+  lidRod.position.y=h+3.4; lidRod.scale.y=1;
+  lidHandle.position.y=h+6.6;
+  dividerWall.scale.set(1,h,1); dividerWall.position.y=h/2;
+  controls.target.set(0,h/2,0);
+}
+buildContainer();
+
+/* instanced particles */
+const sphereGeo=new THREE.SphereGeometry(1, 18, 14);
+function makeInst(color, glow){
+  const mat=new THREE.MeshStandardMaterial({color, roughness:0.25, metalness:0.1,
+    emissive:new THREE.Color(glow), emissiveIntensity:0.55});
+  const im=new THREE.InstancedMesh(sphereGeo, mat, MAXP);
+  im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  im.count=0; scene.add(im); return im;
+}
+const instHeavy=makeInst(SPECIES.heavy.color, SPECIES.heavy.glow);
+const instLight=makeInst(SPECIES.light.color, SPECIES.light.glow);
+const _m=new THREE.Matrix4(), _q=new THREE.Quaternion(), _s=new THREE.Vector3(), _p=new THREE.Vector3();
+const white=new THREE.Color('#ffffff');
+
+/* bloom */
+const composer=new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene,camera));
+const bloom=new UnrealBloomPass(new THREE.Vector2(1,1), 0.5, 0.5, 0.82);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+/* ---------------- physics step ---------------- */
+let impAccum=0, winT=0; const WIN=1.2;
+
+function physics(dt){
+  const {bx,bz}=S; let h=S.h;
+  const Tlive=currentT();
+
+  /* thermal driving (direct energy change only when not thermostatted) */
+  if(S.mode!=='T'){
+    if(S.heating && Tlive<1500) rescaleTemp(1+0.85*dt);
+    if(S.cooling) rescaleTemp(Math.max(0,1-0.85*dt));
+  }
+  if(S.mode==='T' && Tlive>1){
+    const f=Math.sqrt(1+0.06*(S.Ttarget/Tlive-1));
+    rescaleTemp(Math.min(1.05,Math.max(0.95,f)));
+  }
+
+  /* thermal driving in T-mode: heat/cool shifts the target */
+  if(S.mode==='T'){
+    if(S.heating) S.Ttarget=Math.min(1200,S.Ttarget+90*dt);
+    if(S.cooling) S.Ttarget=Math.max(20,S.Ttarget-90*dt);
+  }
+
+  /* piston auto (pressure hold) — target computed in main loop with live T */
+  const hPrev=S.h;
+  if(Math.abs(S.hTarget-S.h)>0.001){
+    S.h+=THREE.MathUtils.clamp(S.hTarget-S.h, -10*dt, 10*dt);
+    h=S.h; updateLid();
+  }
+  S.vLid = dt>0 ? (S.h-hPrev)/dt : 0;   // piston hızı [nm/görsel-s]
+
+  const wallR = { x0:0, x1:bx, z0:0, z1:bz, y0:0, y1:h };
+  const divX = bx/2;
+
+  for(let i=0;i<P.n;i++){
+    const sp=P.sp[i], s=SPECIES[sp?'light':'heavy'], r=s.r;
+    P.x[i]+=P.vx[i]*dt; P.y[i]+=P.vy[i]*dt; P.z[i]+=P.vz[i]*dt;
+
+    /* walls */
+    if(P.x[i]<r){ P.x[i]=r; impAccum+=2*s.m*Math.abs(P.vx[i])/SPEED_SCALE; P.vx[i]=-P.vx[i]; hit(i);} 
+    else if(P.x[i]>bx-r){ P.x[i]=bx-r; impAccum+=2*s.m*Math.abs(P.vx[i])/SPEED_SCALE; P.vx[i]=-P.vx[i]; hit(i);}
+    if(P.z[i]<r){ P.z[i]=r; impAccum+=2*s.m*Math.abs(P.vz[i])/SPEED_SCALE; P.vz[i]=-P.vz[i]; hit(i);} 
+    else if(P.z[i]>bz-r){ P.z[i]=bz-r; impAccum+=2*s.m*Math.abs(P.vz[i])/SPEED_SCALE; P.vz[i]=-P.vz[i]; hit(i);}
+    if(P.y[i]<r){ P.y[i]=r; impAccum+=2*s.m*Math.abs(P.vy[i])/SPEED_SCALE; P.vy[i]=-P.vy[i]; hit(i);} 
+    else if(P.y[i]>h-r){
+      /* hareketli piston: çarpışma piston çerçevesinde yansır → sıkıştırma ısıtır */
+      P.y[i]=h-r;
+      const vrel=P.vy[i]-S.vLid;
+      impAccum+=2*s.m*Math.abs(vrel)/SPEED_SCALE;
+      P.vy[i]=S.vLid-vrel;
+      hit(i);
+    }
+
+    /* divider */
+    if(S.divider){
+      if(P.x[i]<divX && P.x[i]>divX-r-0.11 && P.vx[i]>0){ P.x[i]=divX-r-0.11; P.vx[i]=-P.vx[i]; hit(i);} 
+      else if(P.x[i]>divX && P.x[i]<divX+r+0.11 && P.vx[i]<0){ P.x[i]=divX+r+0.11; P.vx[i]=-P.vx[i]; hit(i);}
+    }
+  }
+
+  /* particle-particle elastic collisions */
+  for(let i=0;i<P.n;i++){
+    const si=SPECIES[P.sp[i]?'light':'heavy'];
+    for(let j=i+1;j<P.n;j++){
+      const sj=SPECIES[P.sp[j]?'light':'heavy'];
+      const dx=P.x[j]-P.x[i], dy=P.y[j]-P.y[i], dz=P.z[j]-P.z[i];
+      const rr=si.r+sj.r;
+      if(Math.abs(dx)>rr||Math.abs(dy)>rr||Math.abs(dz)>rr) continue;
+      const d2=dx*dx+dy*dy+dz*dz;
+      if(d2>rr*rr||d2<1e-12) continue;
+      const d=Math.sqrt(d2), nx=dx/d, ny=dy/d, nz=dz/d;
+      const rvx=P.vx[i]-P.vx[j], rvy=P.vy[i]-P.vy[j], rvz=P.vz[i]-P.vz[j];
+      const van=rvx*nx+rvy*ny+rvz*nz;
+      if(van<=0) continue;
+      const mi=si.m, mj=sj.m;
+      const jimp=2*van/(1/mi+1/mj);
+      P.vx[i]-=jimp/mi*nx; P.vy[i]-=jimp/mi*ny; P.vz[i]-=jimp/mi*nz;
+      P.vx[j]+=jimp/mj*nx; P.vy[j]+=jimp/mj*ny; P.vz[j]+=jimp/mj*nz;
+      /* separate */
+      const overlap=(rr-d)/2+0.001;
+      P.x[i]-=nx*overlap; P.y[i]-=ny*overlap; P.z[i]-=nz*overlap;
+      P.x[j]+=nx*overlap; P.y[j]+=ny*overlap; P.z[j]+=nz*overlap;
+      P.flash[i]=Math.min(1,P.flash[i]+0.5); P.flash[j]=Math.min(1,P.flash[j]+0.5);
+      if(S.colCountOn) S.collisions++;
+    }
+  }
+
+  /* pressure window */
+  winT+=dt;
+  if(winT>=WIN){
+    const A=(bx*NM)*(bz*NM);
+    const dtReal=winT*TSCALE;                 // pencerenin gerçek süresi
+    const Pinst=impAccum/(A*dtReal);          // P = Δp / (A·Δt)  [Pa]
+    S.pMeasured=Pinst;
+    S.pEMA = S.pEMA===0 ? Pinst : S.pEMA+0.3*(Pinst-S.pEMA);
+    impAccum=0; winT=0;
+  }
+  if(S.stopwatchOn) S.stopT+=dt;
+  S.simT+=dt;
+}
+function hit(i){ P.flash[i]=1; S.wallHits++; if(S.colCountOn) S.collisions++; }
+
+/* ---------------- rendering particles ---------------- */
+function renderParticles(){
+  let ch=0, cl=0;
+  for(let i=0;i<P.n;i++){
+    const sp=P.sp[i], s=SPECIES[sp?'light':'heavy'];
+    _p.set(P.x[i]-S.bx/2, P.y[i], P.z[i]-S.bz/2);
+    _s.set(s.r,s.r,s.r);
+    _m.compose(_p,_q,_s);
+    const im=sp?instLight:instHeavy;
+    const idx=sp?cl++:ch++;
+    im.setMatrixAt(idx,_m);
+    if(P.flash[i]>0.02){
+      const base=sp?SPECIES.light.color:SPECIES.heavy.color;
+      im.setColorAt(idx, base.clone().lerp(white, P.flash[i]*0.8));
+      P.flash[i]*=0.86;
+      im.instanceColor.needsUpdate=true;
+    } else if(P.flash[i]!==0){ 
+      im.setColorAt(idx, sp?SPECIES.light.color:SPECIES.heavy.color);
+      P.flash[i]=0; im.instanceColor.needsUpdate=true;
+    }
+  }
+  instHeavy.count=ch; instLight.count=cl;
+  instHeavy.instanceMatrix.needsUpdate=true;
+  instLight.instanceMatrix.needsUpdate=true;
+}
+
+/* ---------------- UI bindings ---------------- */
+const $=id=>document.getElementById(id);
+const fmt=n=>n.toLocaleString('tr-TR');
+let chart=null;   // histogram (setMass erken erişebilir)
+
+document.querySelectorAll('[data-act]').forEach(b=>{
+  b.addEventListener('click',()=>{
+    const a=b.dataset.act, n=+b.dataset.n;
+    if(a==='h+') for(let k=0;k<n;k++) spawn(false, 'L');
+    if(a==='l+') for(let k=0;k<n;k++) spawn(true, 'R');
+    if(a==='h-') for(let k=0;k<n;k++) remove(false);
+    if(a==='l-') for(let k=0;k<n;k++) remove(true);
+    syncCounts();
+  });
+});
+function syncCounts(){
+  let h=0,l=0; for(let i=0;i<P.n;i++) P.sp[i]?l++:h++;
+  $('nHeavy').textContent=h; $('nHeavyBox').textContent=h;
+  $('nLight').textContent=l; $('nLightBox').textContent=l;
+}
+
+/* heat / cool */
+const bindHold=(id,prop)=>{ const el=$(id);
+  const down=e=>{e.preventDefault(); S[prop]=true; el.style.borderColor=prop==='heating'?'#f59e0b':'#38bdf8';};
+  const up=()=>{S[prop]=false; el.style.borderColor='';};
+  el.addEventListener('pointerdown',down); window.addEventListener('pointerup',up);
+  el.addEventListener('pointerleave',up);
+};
+bindHold('heatBtn','heating'); bindHold('coolBtn','cooling');
+
+$('tempSlider').addEventListener('input',e=>{
+  const v=+e.target.value;
+  if(S.mode==='T'){ S.Ttarget=v; $('tempTarget').textContent='hedef: '+v+' K'; }
+  else { S.Ttarget=v; /* direct set: rescale to v */ 
+    const t=currentT(); if(t>0.01) rescaleTemp(Math.sqrt(v/t)); }
+});
+
+/* modes */
+const modeDesc={
+  none:'Sistem yalıtık: enerji ve hacim yalnızca sizin müdahalenizle değişir.',
+  V:'Piston kilitli (izokorik). Isıtınca basınç artar: P ∝ T (Gay-Lussac).',
+  T:'Termostat aktif (izotermal). Parçacıklar hedef sıcaklığa gevşer; eklenen enerji dışarı akar.',
+  P:'Piston serbest (izobarik). Isıtınca hacim artar: V ∝ T (Charles).',
+};
+document.querySelectorAll('[data-mode]').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('[data-mode]').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); S.mode=b.dataset.mode;
+    $('modeDesc').textContent=modeDesc[S.mode];
+    if(S.mode==='P'){ S.pSet=Math.max(P.n*KB*currentT()/(S.bx*S.bz*S.h*1e-27), 1e3); }
+    if(S.mode==='T'){ S.Ttarget=currentT()>1?currentT():300; $('tempTarget').classList.remove('hidden');
+      $('tempTarget').textContent='hedef: '+Math.round(S.Ttarget)+' K'; $('tempSlider').value=Math.round(S.Ttarget);}
+    if(S.mode!=='T') $('tempTarget').classList.add('hidden');
+    if(S.mode==='V'||S.mode==='none') S.hTarget=S.h;
+  });
+});
+
+/* volume slider */
+$('volSlider').addEventListener('input',e=>{
+  if(S.mode==='P') return;
+  S.hTarget=+e.target.value; S.h=+e.target.value; updateLid();
+});
+
+/* tools */
+$('tglStop').addEventListener('click',()=>{ S.stopwatchOn=!S.stopwatchOn; if(!S.stopwatchOn)S.stopT=0;
+  $('badgeStop').classList.toggle('hidden',!S.stopwatchOn); });
+$('tglCol').addEventListener('click',()=>{ S.colCountOn=!S.colCountOn; if(!S.colCountOn)S.collisions=0;
+  $('badgeCol').classList.toggle('hidden',!S.colCountOn); });
+$('tglHist').addEventListener('click',()=>{ S.histOn=!S.histOn; $('histPanel').classList.toggle('hidden',!S.histOn); if(S.histOn)initChart(); });
+$('histClose').addEventListener('click',()=>{ S.histOn=false; $('histPanel').classList.add('hidden'); });
+
+/* ---- gerçek gaz seçimi (kütle değişince sıcaklık korunur) ---- */
+function setMass(key, M){
+  const old=SPECIES[key].m;
+  SPECIES[key].m=M*AMU;
+  SPECIES[key].r=0.28+0.09*Math.cbrt(M);   // yarıçap ∝ ∛M
+  SPECIES[key].M=M;
+  const f=Math.sqrt(old/SPECIES[key].m);
+  for(let i=0;i<P.n;i++){ if((key==='light')===(P.sp[i]===1)){ P.vx[i]*=f; P.vy[i]*=f; P.vz[i]*=f; } }
+  if(chart){ const di=key==='heavy'?0:1;
+    chart.data.datasets[di].label=(key==='heavy'?'Ağır':'Hafif')+` (${M} u)`;
+    chart.data.datasets[di+2].label=`MB teorik (${M} u)`; }
+}
+$('selHeavy').addEventListener('change',e=>setMass('heavy',+e.target.value));
+$('selLight').addEventListener('change',e=>setMass('light',+e.target.value));
+setMass('heavy',40); setMass('light',4);
+
+/* ---- CSV veri kaydı ---- */
+let csvOn=false; const csvData=[]; let csvTick=0;
+$('csvBtn').addEventListener('click',()=>{
+  if(!csvOn){ csvOn=true; csvData.length=0; csvTick=0;
+    $('csvState').classList.remove('hidden');
+    $('csvBtn').style.borderColor='#a78bfa'; $('csvBtn').style.color='#a78bfa'; }
+  else { csvOn=false; $('csvState').classList.add('hidden');
+    $('csvBtn').style.borderColor=''; $('csvBtn').style.color=''; downloadCSV(); }
+});
+function downloadCSV(){
+  let out='zaman_s;T_K;P_atm;P_kPa;V_nm3;N_agir;N_hafif\n';
+  for(const r of csvData) out+=r.join(';')+'\n';
+  const blob=new Blob([out],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='kinetiklab_'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.csv';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+}
+
+$('dividerBtn').addEventListener('click',()=>{ S.divider=!S.divider; dividerWall.visible=S.divider;
+  $('dividerBtn').style.borderColor=S.divider?'#22d3ee':''; $('dividerBtn').style.color=S.divider?'#22d3ee':''; });
+$('separateBtn').addEventListener('click',()=>{
+  /* ağır sola, hafif sağa */
+  for(let i=0;i<P.n;i++){ const s=SPECIES[P.sp[i]?'light':'heavy'];
+    if(P.sp[i]===0) P.x[i]=Math.min(Math.max(P.x[i],s.r), S.bx/2-s.r-0.2);
+    else P.x[i]=Math.max(Math.min(P.x[i],S.bx-s.r), S.bx/2+s.r+0.2);
+  }
+});
+
+/* transport */
+$('playBtn').addEventListener('click',togglePlay);
+function togglePlay(){ S.paused=!S.paused;
+  $('playBtn').innerHTML=S.paused?'<i class="fa-solid fa-play"></i>':'<i class="fa-solid fa-pause"></i>';
+  $('playBtn').style.background=S.paused?'linear-gradient(135deg,#f59e0b,#ef4444)':'linear-gradient(135deg,#2563eb,#38bdf8)';
+}
+$('stepBtn').addEventListener('click',()=>{ if(S.paused) physics(1/60); });
+$('resetBtn').addEventListener('click',reset);
+document.querySelectorAll('#speedGroup [data-sp]').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('#speedGroup [data-sp]').forEach(x=>{x.style.background='';x.style.borderColor='';x.style.color='';});
+    b.style.background='#153052'; b.style.borderColor='#3f6cab'; b.style.color='#cfe4ff';
+    S.speed=+b.dataset.sp;
+  });
+});
+$('fsBtn').addEventListener('click',()=>{ if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); });
+
+/* keyboard */
+window.addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault(); togglePlay();}
+  if(e.key==='h') S.heating=true; if(e.key==='c') S.cooling=true;
+});
+window.addEventListener('keyup',e=>{ if(e.key==='h')S.heating=false; if(e.key==='c')S.cooling=false; });
+
+/* help */
+$('helpBtn').addEventListener('click',()=>{$('helpModal').classList.remove('hidden');$('helpModal').classList.add('flex');});
+$('helpClose').addEventListener('click',()=>{$('helpModal').classList.add('hidden');$('helpModal').classList.remove('flex');});
+$('helpModal').addEventListener('click',e=>{ if(e.target.id==='helpModal'){$('helpModal').classList.add('hidden');$('helpModal').classList.remove('flex');}});
+
+/* mobile drawer */
+const sidePanel=$('sidePanel'), backdrop=$('panelBackdrop');
+function closePanel(){ sidePanel.classList.add('translate-x-full'); backdrop.classList.add('hidden'); }
+$('panelToggle').addEventListener('click',()=>{
+  if(sidePanel.classList.contains('translate-x-full')){
+    sidePanel.classList.remove('translate-x-full'); backdrop.classList.remove('hidden');
+  } else closePanel();
+});
+backdrop.addEventListener('click',closePanel);
+
+/* lid drag */
+let dragging=false, lastY=0;
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2();
+canvas.addEventListener('pointerdown',e=>{
+  mouse.set((e.clientX/innerWidth)*2-1, -((e.clientY-56)/(innerHeight-56))*2+1);
+  ray.setFromCamera(mouse,camera);
+  const hits=ray.intersectObjects([lid,lidRod,lidHandle],false);
+  if(hits.length&&S.mode!=='P'){ dragging=true; lastY=e.clientY; controls.enabled=false;
+    canvas.style.cursor='ns-resize'; e.stopPropagation(); }   // dokunmatikte kamera dönmesin
+},true);
+window.addEventListener('pointermove',e=>{
+  if(!dragging) return;
+  const dy=e.clientY-lastY; lastY=e.clientY;
+  S.h=THREE.MathUtils.clamp(S.h-dy*0.06, 6, 30); S.hTarget=S.h; updateLid();
+  $('volSlider').value=S.h;
+});
+window.addEventListener('pointerup',()=>{ if(dragging){dragging=false; controls.enabled=true; canvas.style.cursor='';}});
+
+/* ---------------- histogram ---------------- */
+const BINS=26, BW=100;
+function initChart(){
+  if(chart) return;
+  const ctx=$('histChart').getContext('2d');
+  const labels=Array.from({length:BINS},(_,i)=>i*BW);
+  chart=new Chart(ctx,{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'Ağır (40u)',data:new Array(BINS).fill(0),backgroundColor:'rgba(90,162,255,.55)',borderColor:'#5aa2ff',borderWidth:1,order:3},
+      {label:'Hafif (4u)',data:new Array(BINS).fill(0),backgroundColor:'rgba(255,122,89,.5)',borderColor:'#ff7a59',borderWidth:1,order:4},
+      {label:'MB teorik (ağır)',data:[],type:'line',borderColor:'#9ecbff',borderDash:[4,3],borderWidth:1.5,pointRadius:0,order:1},
+      {label:'MB teorik (hafif)',data:[],type:'line',borderColor:'#ffb59e',borderDash:[4,3],borderWidth:1.5,pointRadius:0,order:2},
+    ]},
+    options:{animation:false,responsive:true,maintainAspectRatio:false,
+      scales:{x:{ticks:{color:'#8ea3c4',font:{size:9},maxTicksLimit:7},grid:{color:'rgba(33,51,82,.5)'},title:{display:true,text:'hız (m/s)',color:'#8ea3c4',font:{size:9}}},
+              y:{ticks:{color:'#8ea3c4',font:{size:9}},grid:{color:'rgba(33,51,82,.5)'}}},
+      plugins:{legend:{labels:{color:'#c6d4ea',font:{size:9},boxWidth:10}}}}
+  });
+}
+function updateChart(){
+  if(!chart) return;
+  const T=currentT();
+  const hH=new Array(BINS).fill(0), hL=new Array(BINS).fill(0);
+  let nH=0,nL=0;
+  for(let i=0;i<P.n;i++){
+    const m=SPECIES[P.sp[i]?'light':'heavy'].m;
+    const v=Math.sqrt(P.vx[i]**2+P.vy[i]**2+P.vz[i]**2)/SPEED_SCALE;
+    const b=Math.min(BINS-1, Math.floor(v/BW));
+    if(P.sp[i]) {hL[b]++;nL++;} else {hH[b]++;nH++;}
+  }
+  const mb=(m,n)=>Array.from({length:BINS},(_,k)=>{
+    const v=(k+0.5)*BW;
+    return n*4*Math.PI*Math.pow(m/(2*Math.PI*KB*T),1.5)*v*v*Math.exp(-m*v*v/(2*KB*T))*BW;
+  });
+  chart.data.datasets[0].data=hH;
+  chart.data.datasets[1].data=hL;
+  chart.data.datasets[2].data=T>1?mb(SPECIES.heavy.m,nH):[];
+  chart.data.datasets[3].data=T>1?mb(SPECIES.light.m,nL):[];
+  chart.update('none');
+}
+
+/* ---------------- readouts ---------------- */
+function updateReadouts(){
+  const T=currentT(); S.T=T;
+  const Vm=S.bx*S.bz*S.h*1e-27;
+  const N=P.n;
+  const pIdeal=N>0? N*KB*T/Vm : 0;
+  const pDisp=N>0? (S.pEMA>0?S.pEMA:pIdeal) : 0;
+
+  $('tempBig').textContent=Math.round(T);
+  $('tempBig').style.color = T<150?'#7dd3fc' : T>600?'#fca5a5':'#ffd9a0';
+  $('volVal').textContent=fmt(Math.round(S.bx*S.bz*S.h))+' nm³';
+  $('volSlider').value=S.h;
+
+  const atm=pDisp/ATM;
+  $('presBig').textContent=atm.toFixed(2);
+  $('presKpa').textContent=(pDisp/1000).toFixed(1);
+  $('presIdeal').textContent=(pIdeal/ATM).toFixed(2);
+  const frac=Math.min(atm/4,1);
+  $('needleG').style.transform=`rotate(${frac*180}deg)`;
+  $('gaugeArc').style.strokeDashoffset=264-264*frac;
+
+  $('pv').textContent=(pDisp*Vm/1e-21).toFixed(2)+' zJ';
+  $('nkt').textContent=(N*KB*T/1e-21).toFixed(2)+' zJ';
+  const dev=pIdeal>0?Math.abs(pDisp-pIdeal)/pIdeal*100:0;
+  $('lawDelta').textContent=N>0?`ölçülen ↔ teorik sapma: %${dev.toFixed(1)}`:'parçacık ekleyin';
+  $('lawDelta').style.color=dev<8?'#4ade80':'#8ea3c4';
+
+  /* per-species stats */
+  let EH=0,nH=0,EL=0,nL=0,v2H=0,v2L=0;
+  for(let i=0;i<P.n;i++){
+    const m=SPECIES[P.sp[i]?'light':'heavy'].m;
+    const v2=(P.vx[i]**2+P.vy[i]**2+P.vz[i]**2)/(SPEED_SCALE**2);
+    if(P.sp[i]){EL+=0.5*m*v2;v2L+=v2;nL++;} else {EH+=0.5*m*v2;v2H+=v2;nH++;}
+  }
+  $('keA').textContent=nH? (EH/nH*NA/1000).toFixed(2):'—';
+  $('keB').textContent=nL? (EL/nL*NA/1000).toFixed(2):'—';
+  $('rmsA').textContent=nH? Math.round(Math.sqrt(v2H/nH)):'—';
+  $('rmsB').textContent=nL? Math.round(Math.sqrt(v2L/nL)):'—';
+
+  /* CSV log (~1 Hz) */
+  if(csvOn && N>0){ csvTick++;
+    if(csvTick%5===0){
+      csvData.push([S.simT.toFixed(2), Math.round(T), (pDisp/ATM).toFixed(3),
+        (pDisp/1000).toFixed(1), Math.round(S.bx*S.bz*S.h), nH, nL]);
+      if(csvData.length>7200) csvData.shift();
+      $('csvRows').textContent=csvData.length;
+    }
+  }
+
+  if(S.stopwatchOn) $('stopVal').textContent=S.stopT.toFixed(2)+' s';
+  if(S.colCountOn) $('colVal').textContent=fmt(S.collisions);
+}
+
+/* ---------------- reset ---------------- */
+function reset(){
+  P.n=0; S.collisions=0; S.wallHits=0; S.stopT=0; S.pEMA=0; impAccum=0; winT=0;
+  S.h=16; S.hTarget=16; S.Ttarget=300; $('tempSlider').value=300;
+  S.mode='none'; document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('on',x.dataset.mode==='none'));
+  $('modeDesc').textContent=modeDesc.none; $('tempTarget').classList.add('hidden');
+  updateLid();
+  for(let k=0;k<100;k++) spawn(false,'L');
+  syncCounts();
+}
+
+/* ---------------- resize ---------------- */
+function resize(){
+  const w=innerWidth, h=innerHeight-56;
+  renderer.setSize(w,h,false);
+  composer.setSize(w,h);
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize',resize); resize();
+
+/* ---------------- main loop ---------------- */
+let last=performance.now(), chartTick=0;
+function loop(now){
+  requestAnimationFrame(loop);
+  const rdt=Math.min((now-last)/1000, 0.05); last=now;
+  if(!S.paused){
+    const dt=rdt*S.speed;
+    const sub=Math.max(2, Math.ceil(2*S.speed));   // yüksek hızda tünellemeyi önle
+    for(let s=0;s<sub;s++) physics(dt/sub);
+  }
+  /* fix: pressure hold needs live T — recompute target here */
+  if(S.mode==='P' && !S.paused){
+    const T=currentT();
+    const Vt=P.n*KB*Math.max(T,1)/Math.max(S.pSet,1e3);
+    S.hTarget=THREE.MathUtils.clamp(Vt/(S.bx*S.bz*1e-27), 6, 30);
+  }
+  renderParticles();
+  controls.update();
+  composer.render();
+
+  chartTick+=rdt;
+  if(chartTick>0.2){ chartTick=0; updateReadouts(); if(S.histOn) updateChart(); }
+}
+
+/* boot */
+reset();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
